@@ -1,25 +1,29 @@
 #! /usr/bin/env python
 
-# This script should be run in the dirty_data directory:
-# ..
-#  └─ dirty_data
-#     ├─ research_id_0001
-#     ├─ research_id_0002
-#     └─ ...
+import errno, sys, os
+import tarfile, json, csv
+import xml.dom.minidom
+from dateutil import parser, relativedelta, utils
+from datetime import timedelta
 
-import sys, os
-
-import tarfile
-
-import xml.etree.ElementTree as ET
-import xml.dom.minidom as MD
-
-def clean_google_takeout(source, destination, xml_root):
-    if tarfile.is_tarfile(source):
-        source_file = tarfile.open(name=source, mode='r')
+def process_google_takeout(source_dir, destination_dir):
+    if tarfile.is_tarfile(source_dir):
+        source_file = tarfile.open(name=source_dir, mode='r')
+        
+        # Google Takeout data directory path
+        data_path = os.path.join(destination_dir, 'google-lifelog-data')
+        
+        # Create a directory for Google Takeout data
+        try:
+            os.mkdir(data_path)
+        except FileExistsError:
+            # Ignore if the directory already exists
+            pass
 
         # For keeping track of available data
-        status = {}
+        status = {
+            'android_activity_data' : '1'
+        }
 
         # Get the Android activity JSON file, if it exists
         try:
@@ -39,52 +43,94 @@ def clean_google_takeout(source, destination, xml_root):
                 )
             except:
                 # TODO: Handle other types of accounts, otherwise...
-
-                # Android activity data is likely unavailable
+                # Android activity data does not exist
                 status['android_activity_data'] = '0'
         
-        status['android_activity_data'] = '1'
+        # Handle Android activity data, if it exists
+        if int(status['android_activity_data']):
+            android_activity = json.load(android_activity_json)
+            
+            # Get the date and time for the most recent Android activity
+            present = parser.parse(android_activity[0]['time'])
 
-        xml_root.append(ET.Element('google_takeout_data', status))
+            # Get the date and time for the Android activity from six months ago
+            past = present + relativedelta.relativedelta(months=-6)
+
+            # Get the number of days between those times
+            num_days = abs(present - past).days
+            
+            csv_file_path = os.path.join(data_path, 'android-activity-data')
+
+            # Create a directory for the CSV file to be generated
+            try:
+                os.mkdir(csv_file_path)
+            except FileExistsError:
+                # Ignore if the directory already exists
+                pass
+            
+            # Export the name of the application and the time accessed into a CSV file
+            with open(os.path.join(csv_file_path, 'android_activity.csv'), 'w', newline='') as android_activity_csv:
+                csv_writer = csv.DictWriter(android_activity_csv, fieldnames=['application', 'time_accessed'])
+                csv_writer.writeheader()
+                for i in range(len(android_activity)):
+                    # Get the time of the current activity
+                    current = parser.parse(android_activity[i]['time'])
+                    # Check if the current antivity is within the range of six months
+                    if utils.within_delta(present, current, timedelta(days=num_days)):
+                        csv_writer.writerow({'application' : android_activity[i]['header'], 'time_accessed' : current})
+                    else:
+                        break
+
+        # Write and return the status for the XML document
+        xml = '<google_takeout_lifelog_data'
+        for s in list(status.keys()):
+            xml = xml + ' ' + s + '=' + f'"{status[s]}"'
+        else:
+            xml = xml + ' />'
+        return xml
 
 def main():
-    # Create a directory for cleaned data
+    # Create a directory for clean data
     try:
-        os.mkdir(os.path.join(os.pardir, 'clean_data'))
-        print('Created clean_data directory.')
+        os.mkdir(os.path.join(os.curdir, 'clean_data'))
     except FileExistsError:
         # Ignore if the directory already exists
         pass
 
     # Get a list of research identifiers
-    r_id = os.listdir(os.path.join(os.pardir, 'dirty_data'))
-
-    # Exclude this script from the list of research identifiers
-    script_name = str(sys.argv[0])
-    r_id.remove(script_name[2:] if './' in script_name else script_name)
+    try:
+        # Use the user specified directory name
+        dirty_data_dir = sys.argv[1]
+    except IndexError:
+        # Otherwise, use the default directory name
+        dirty_data_dir = 'dirty_data'
+    finally:
+        # Check if the directory actually exists
+        if os.path.exists(os.path.join(os.curdir, dirty_data_dir)):
+            r_id = os.listdir(os.path.join(os.curdir, dirty_data_dir))
+        else:
+            raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), dirty_data_dir)
 
     for id in r_id:
-        # Create a subdirectory for each research identifiers
+        # Create a subdirectory in clean_data for the research identifier
         try:
-            os.mkdir(os.path.join(os.pardir, 'clean_data', id))
-            print('Created subdirectory for ' + id + ' inside clean_data.')
+            os.mkdir(os.path.join(os.curdir, 'clean_data', id))
         except FileExistsError:
             # Ignore if the directory already exists
             pass
 
-        # Get a list of files contained in the current research identifier
-        files = os.listdir(os.path.join(os.pardir, 'dirty_data', id))
+        # Get a list of files contained in the research identifier in dirty data
+        files = os.listdir(os.path.join(os.curdir, dirty_data_dir, id))
 
         # Create an XML document for keeping track of avaliable data
-        root = ET.Element(id)
+        id_xml = f'<{id}>'
 
         for file in files:
-            # Handle Google Takeout files
+            # Handle Google Takeout lifelog data
             if 'takeout-' in file and ('.tgz' in file or '.gtar' in file):
-                clean_google_takeout(
-                    os.path.join(os.pardir, 'dirty_data', id, file), 
-                    os.path.join(os.pardir, 'clean_data', id),
-                    root
+                id_xml = id_xml + process_google_takeout(
+                    os.path.join(os.curdir, dirty_data_dir, id, file), 
+                    os.path.join(os.curdir, 'clean_data', id),
                 )
             # Handle call log file
             elif 'calllogs_' in file and '.xml' in file:
@@ -92,14 +138,14 @@ def main():
             else:
                 pass
         else:
+            id_xml = id_xml + f'</{id}>'
+
             # Generate the XML document
-            with open(os.path.join(os.pardir, 'clean_data', id, id + '.xml'), 'wb') as xml_file:
+            with open(os.path.join(os.curdir, 'clean_data', id, id + '.xml'), 'wb') as xml_file:
                 # Pretty-print the XML document before writing
                 xml_file.write(
-                    MD.parseString(ET.tostring(root)).toprettyxml(encoding='utf-8')
+                    xml.dom.minidom.parseString(id_xml).toprettyxml(encoding='utf-8')
                 )
         
-# Usage: python clean.py
-# Alternative usage for Linux: ./clean.py
 if __name__ == '__main__':
     main()
