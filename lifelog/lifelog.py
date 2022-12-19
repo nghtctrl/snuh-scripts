@@ -9,16 +9,6 @@ from datetime import timedelta
 def process_google_takeout(source_dir, destination_dir):
     if tarfile.is_tarfile(source_dir):
         source_file = tarfile.open(name=source_dir, mode='r')
-        
-        # Google Takeout data directory path
-        data_path = os.path.join(destination_dir, 'google-lifelog-data')
-        
-        # Create a directory for Google Takeout data
-        try:
-            os.mkdir(data_path)
-        except FileExistsError:
-            # Ignore if the directory already exists
-            pass
 
         # For keeping track of available data
         status = {
@@ -59,17 +49,8 @@ def process_google_takeout(source_dir, destination_dir):
             # Get the number of days between those times
             num_days = abs(present - past).days
             
-            csv_file_path = os.path.join(data_path, 'android-activity-data')
-
-            # Create a directory for the CSV file to be generated
-            try:
-                os.mkdir(csv_file_path)
-            except FileExistsError:
-                # Ignore if the directory already exists
-                pass
-            
             # Export the name of the application and the time accessed into a CSV file
-            with open(os.path.join(csv_file_path, 'android_activity.csv'), 'w', newline='') as android_activity_csv:
+            with open(os.path.join(destination_dir, 'android_activity.csv'), 'w', newline='') as android_activity_csv:
                 csv_writer = csv.DictWriter(android_activity_csv, fieldnames=['application', 'time_accessed'])
                 csv_writer.writeheader()
                 for i in range(len(android_activity)):
@@ -82,11 +63,11 @@ def process_google_takeout(source_dir, destination_dir):
                         break
 
         # Write and return the status for the XML document
-        xml = '<google_takeout_lifelog_data'
+        xml = '<google_takeout'
         for s in list(status.keys()):
             xml = xml + ' ' + s + '=' + f'"{status[s]}"'
         else:
-            xml = xml + ' />'
+            xml = xml + '/>'
         return xml
 
 def main():
@@ -111,7 +92,12 @@ def main():
         else:
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), dirty_data_dir)
 
+    # Create an XML document for keeping track of avaliable data
+    id_xml = ''
+
     for id in r_id:
+        id_xml = id_xml + f'<{id}>'
+
         # Create a subdirectory in clean_data for the research identifier
         try:
             os.mkdir(os.path.join(os.curdir, 'clean_data', id))
@@ -121,9 +107,6 @@ def main():
 
         # Get a list of files contained in the research identifier in dirty data
         files = os.listdir(os.path.join(os.curdir, dirty_data_dir, id))
-
-        # Create an XML document for keeping track of avaliable data
-        id_xml = f'<{id}>'
 
         for file in files:
             # Handle Google Takeout lifelog data
@@ -137,15 +120,15 @@ def main():
                 pass
             else:
                 pass
-        else:
-            id_xml = id_xml + f'</{id}>'
 
-            # Generate the XML document
-            with open(os.path.join(os.curdir, 'clean_data', id, id + '.xml'), 'wb') as xml_file:
-                # Pretty-print the XML document before writing
-                xml_file.write(
-                    xml.dom.minidom.parseString(id_xml).toprettyxml(encoding='utf-8')
-                )
+        id_xml = id_xml + f'</{id}>'
+
+    # Generate the XML document
+    with open(os.path.join(os.curdir, 'clean_data', 'log.xml'), 'wb') as xml_file:
+        # Pretty-print the XML document before writing
+        xml_file.write(
+            xml.dom.minidom.parseString(id_xml).toprettyxml(encoding='utf-8')
+        )
         
 if __name__ == '__main__':
     main()
