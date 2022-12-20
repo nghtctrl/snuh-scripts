@@ -2,18 +2,15 @@
 
 import errno, sys, os
 import tarfile, json, csv
-import xml.dom.minidom
+import xmltodict
 from dateutil import parser, relativedelta, utils
-from datetime import timedelta
+from datetime import datetime, timedelta
+
+from pprint import pprint
 
 def process_google_takeout(source_dir, destination_dir):
     if tarfile.is_tarfile(source_dir):
         source_file = tarfile.open(name=source_dir, mode='r')
-
-        # For keeping track of available data
-        status = {
-            'android_activity_data' : '1'
-        }
 
         # Get the Android activity JSON file, if it exists
         try:
@@ -33,42 +30,69 @@ def process_google_takeout(source_dir, destination_dir):
                 )
             except:
                 # TODO: Handle other types of accounts, otherwise...
-                # Android activity data does not exist
-                status['android_activity_data'] = '0'
+                pass
         
-        # Handle Android activity data, if it exists
-        if int(status['android_activity_data']):
-            android_activity = json.load(android_activity_json)
-            
-            # Get the date and time for the most recent Android activity
-            present = parser.parse(android_activity[0]['time'])
+        android_activity = json.load(android_activity_json)
+        
+        # Get the date and time for the most recent Android activity
+        present = parser.parse(android_activity[0]['time'])
 
-            # Get the date and time for the Android activity from six months ago
-            past = present + relativedelta.relativedelta(months=-6)
+        # Get the date and time for the Android activity from six months ago
+        past = present + relativedelta.relativedelta(months=-6)
 
-            # Get the number of days between those times
-            num_days = abs(present - past).days
-            
-            # Export the name of the application and the time accessed into a CSV file
-            with open(os.path.join(destination_dir, 'android_activity.csv'), 'w', newline='') as android_activity_csv:
-                csv_writer = csv.DictWriter(android_activity_csv, fieldnames=['application', 'time_accessed'])
-                csv_writer.writeheader()
-                for i in range(len(android_activity)):
-                    # Get the time of the current activity
-                    current = parser.parse(android_activity[i]['time'])
-                    # Check if the current antivity is within the range of six months
-                    if utils.within_delta(present, current, timedelta(days=num_days)):
-                        csv_writer.writerow({'application' : android_activity[i]['header'], 'time_accessed' : current})
-                    else:
-                        break
+        # Get the number of days between those times
+        num_days = abs(present - past).days
+        
+        # Process relevant data then export it into a CSV file
+        with open(os.path.join(destination_dir, 'android_activity.csv'), 'w', newline='') as android_activity_csv:
+            csv_writer = csv.DictWriter(android_activity_csv, fieldnames=['Application', 'Date'])
+            csv_writer.writeheader()
+            for i in range(len(android_activity)):
+                # Get the time of the current activity
+                current = parser.parse(android_activity[i]['time'])
+                # Check if the current antivity is within the range of six months
+                if utils.within_delta(present, current, timedelta(days=num_days)):
+                    csv_writer.writerow({'Application' : android_activity[i]['header'], 'Date' : current})
+                else:
+                    break
 
-        # Write and return the status for the XML document
-        xml = '<google_takeout'
-        for s in list(status.keys()):
-            xml = xml + ' ' + s + '=' + f'"{status[s]}"'
-        else:
-            xml = xml + '/>'
-        return xml
+def to_iso_format(epoch):
+    return datetime.fromtimestamp(float(epoch[:10] + '.' + epoch[10:])).isoformat()
+
+def process_call_log(source_dir, destination_dir):
+    # Call type reference from: https://developer.android.com/reference/android/provider/CallLog.Calls
+    call_type = ['incoming', 'outgoing', 'missed', 'voicemail', 'rejected', 'blocked', 'answered_externally']
+
+    with open(source_dir, 'r', encoding='utf-8') as call_log_file:
+        # Load the XML file
+        call_log_xml = call_log_file.read()
+        call_log = xmltodict.parse(call_log_xml)
+        
+        # Get the date and time for the most recent call
+        present_iso = to_iso_format(call_log['alllogs']['log'][0]['@date'])
+        present = parser.parse(present_iso)
+
+        # Get the date and time for the call from six months ago
+        past = present + relativedelta.relativedelta(months=-6)
+
+        # Get the number of days between those times
+        num_days = abs(present - past).days
+
+        # Process relevant data then export it into a CSV file
+        with open(os.path.join(destination_dir, 'call_log.csv'), 'w', newline='') as call_log_csv:
+            csv_writer = csv.DictWriter(call_log_csv, fieldnames=['Number', 'Date', 'CallType', 'CallDuration'])
+            csv_writer.writeheader()
+            for log in call_log['alllogs']['log']:
+                current = parser.parse(to_iso_format(log['@date']))
+                if utils.within_delta(present, current, timedelta(days=num_days)):
+                    csv_writer.writerow({
+                        'Number' : str(log['@number']),
+                        'Date' : current,
+                        'CallType' : call_type[int(log['@type']) - 1],
+                        'CallDuration' : log['@dur'],
+                    })
+                else:
+                    break
 
 def main():
     # Create a directory for clean data
@@ -92,12 +116,7 @@ def main():
         else:
             raise FileNotFoundError(errno.ENOENT, os.strerror(errno.ENOENT), dirty_data_dir)
 
-    # Create an XML document for keeping track of avaliable data
-    id_xml = ''
-
     for id in r_id:
-        id_xml = id_xml + f'<{id}>'
-
         # Create a subdirectory in clean_data for the research identifier
         try:
             os.mkdir(os.path.join(os.curdir, 'clean_data', id))
@@ -108,27 +127,19 @@ def main():
         # Get a list of files contained in the research identifier in dirty data
         files = os.listdir(os.path.join(os.curdir, dirty_data_dir, id))
 
+        clean_file_path = os.path.join(os.curdir, 'clean_data', id)
+
         for file in files:
+            dirty_file_path = os.path.join(os.curdir, dirty_data_dir, id, file)
+
             # Handle Google Takeout lifelog data
             if 'takeout-' in file and ('.tgz' in file or '.gtar' in file):
-                id_xml = id_xml + process_google_takeout(
-                    os.path.join(os.curdir, dirty_data_dir, id, file), 
-                    os.path.join(os.curdir, 'clean_data', id),
-                )
+                process_google_takeout(dirty_file_path, clean_file_path)
             # Handle call log file
             elif 'calllogs_' in file and '.xml' in file:
-                pass
+                process_call_log(dirty_file_path, clean_file_path)
             else:
                 pass
-
-        id_xml = id_xml + f'</{id}>'
-
-    # Generate the XML document
-    with open(os.path.join(os.curdir, 'clean_data', 'log.xml'), 'wb') as xml_file:
-        # Pretty-print the XML document before writing
-        xml_file.write(
-            xml.dom.minidom.parseString(id_xml).toprettyxml(encoding='utf-8')
-        )
         
 if __name__ == '__main__':
     main()
