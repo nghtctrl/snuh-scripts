@@ -10,7 +10,7 @@ def epoch_to_iso(epoch: str) -> str:
 
 def iso_to_date(iso_date: str) -> str:
     """Convert ISO 8601 date to a human readable date"""
-    # YYYY-MM-DD HH-MM-SS (24-HR format)
+    # YYYY-MM-DD HH:MM:SS (24HR format)
     return parse(iso_date).strftime('%Y-%m-%d %H:%M:%S') 
 
 def within_six_months(date1: str, date2: str) -> bool:
