@@ -14,19 +14,12 @@ def generate_csv(source: str, destination: str) -> None:
             )
         )
     except KeyError:
-        try:
-            # From English (U.S.) accounts
-            android_activity_json = source.extractfile(
-                source.getmember(
-                    os.path.join('Takeout', 'My Activity', 'Android', 'MyActivity.json')
-                )
+        # From English (U.S.) accounts
+        android_activity_json = source.extractfile(
+            source.getmember(
+                os.path.join('Takeout', 'My Activity', 'Android', 'MyActivity.json')
             )
-        except KeyError:
-            # TODO: Handle other types of accounts
-            return
-        except:
-            # TODO: Fail silently for now
-            return
+        )
     except:
         # TODO: Fail silently for now
         return
@@ -38,11 +31,11 @@ def generate_csv(source: str, destination: str) -> None:
 
     # Process relevant data then export it into a CSV file
     with open(os.path.join(destination, 'android-activity.csv'), 'w', newline='', encoding='utf-8') as android_activity_csv:
-        csv_writer = csv.DictWriter(android_activity_csv, fieldnames=['Application', 'Date'])
-        csv_writer.writeheader()
-        for i in range(len(android_activity)):
-            current_date = android_activity[i]['time']
+        csv_writer = csv.writer(android_activity_csv)
+        csv_writer.writerow(['Application', 'Date'])
+        for activity in android_activity:
+            current_date = activity['time']
             if date.within_six_months(recent_date, current_date):
-                csv_writer.writerow({'Application': android_activity[i]['header'], 'Date': date.iso_to_date(current_date)})
+                csv_writer.writerow([activity['header'], date.iso_to_date(current_date)])
             else:
                 break

@@ -30,17 +30,17 @@ def generate_csv(source: str, destination: str) -> None:
 
         # Process relevant data then export it into a CSV file
         with open(os.path.join(destination, 'call-log.csv'), 'w', newline='', encoding='utf-8') as call_log_csv:
-            csv_writer = csv.DictWriter(call_log_csv, fieldnames=['Number', 'Date', 'CallType', 'CallDuration'])
-            csv_writer.writeheader()
+            csv_writer = csv.writer(call_log_csv)
+            csv_writer.writerow(['Number', 'Date', 'CallType', 'CallDuration'])
             for log in call_log['alllogs']['log']:
                 tmp = log['@date']
                 current_date = date.epoch_to_iso(tmp[:10] + '.' + tmp[10:])
                 if date.within_six_months(recent_date, current_date):
-                    csv_writer.writerow({
-                        'Number': str(log['@number']),
-                        'Date': date.iso_to_date(current_date),
-                        'CallType': _get_call_type(log['@type']),
-                        'CallDuration': log['@dur'],
-                    })
+                    csv_writer.writerow([
+                        str(log['@number']),
+                        date.iso_to_date(current_date),
+                        _get_call_type(log['@type']),
+                        log['@dur'],
+                    ])
                 else:
                     break
