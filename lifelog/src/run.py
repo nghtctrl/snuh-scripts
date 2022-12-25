@@ -4,14 +4,15 @@ import tarfile
 import errno, sys, os
 
 import android_activity
+import google_timeline
 import call_log
 
 def run():
     # Create a directory for clean data
-    try:
-        os.mkdir(os.path.join(os.pardir, 'clean-data'))
-    except FileExistsError:
-        pass
+    # try:
+    #     os.mkdir(os.path.join(os.pardir, 'clean-data'))
+    # except FileExistsError:
+    #     pass
 
     # Get a list of research identifiers
     try:
@@ -47,6 +48,7 @@ def run():
                 if tarfile.is_tarfile(dirty_file_path):
                     source_file = tarfile.open(name=dirty_file_path, mode='r', encoding='utf-8')
                     android_activity.generate_csv(source_file, clean_file_path)
+                    google_timeline.generate_csv(source_file, clean_file_path)
             # Handle call log data
             elif 'calllogs_' in file and '.xml' in file:
                 call_log.generate_csv(dirty_file_path, clean_file_path)
