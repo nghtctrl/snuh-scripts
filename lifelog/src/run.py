@@ -9,10 +9,10 @@ import call_log
 
 def run():
     # Create a directory for clean data
-    # try:
-    #     os.mkdir(os.path.join(os.pardir, 'clean-data'))
-    # except FileExistsError:
-    #     pass
+    try:
+        os.mkdir(os.path.join(os.pardir, 'clean-data'))
+    except FileExistsError:
+        pass
 
     # Get a list of research identifiers
     try:
