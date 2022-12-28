@@ -13,7 +13,7 @@ def _get_call_type(type: str) -> str:
         '4': 'voicemail',
         '5': 'rejected',
         '6': 'blocked',
-        '7': 'answered-externally'
+        '7': 'answered externally'
     }
     
     return call_types[type]
@@ -25,19 +25,17 @@ def generate_csv(source: str, destination: str) -> None:
         call_log = xmltodict.parse(call_log_xml)
 
         # Get the date from the most recent call
-        tmp = call_log['alllogs']['log'][0]['@date']
-        recent_date = date.epoch_to_iso(tmp[:10] + '.' + tmp[10:])
+        recent_date = date.epoch_to_iso(int(call_log['alllogs']['log'][0]['@date']) / 10.0E+2)
 
         # Process relevant data then export it into a CSV file
         with open(os.path.join(destination, 'call-log.csv'), 'w', newline='', encoding='utf-8') as call_log_csv:
-            csv_writer = csv.writer(call_log_csv)
+            csv_writer = csv.writer(call_log_csv, quoting=csv.QUOTE_ALL)
             csv_writer.writerow(['Number', 'Date', 'CallType', 'CallDuration'])
             for log in call_log['alllogs']['log']:
-                tmp = log['@date']
-                current_date = date.epoch_to_iso(tmp[:10] + '.' + tmp[10:])
+                current_date = date.epoch_to_iso(float(log['@date']) / 10.0E+2)
                 if date.within_six_months(recent_date, current_date):
                     csv_writer.writerow([
-                        str(log['@number']),
+                        log['@number'],
                         date.iso_to_date(current_date),
                         _get_call_type(log['@type']),
                         log['@dur'],
