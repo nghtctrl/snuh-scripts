@@ -31,7 +31,7 @@ def generate_csv(source: str, destination: str) -> None:
 
     # Process relevant data then export it into a CSV file
     with open(os.path.join(destination, 'android-activity.csv'), 'w', newline='', encoding='utf-8') as android_activity_csv:
-        csv_writer = csv.writer(android_activity_csv)
+        csv_writer = csv.writer(android_activity_csv, quoting=csv.QUOTE_ALL)
         csv_writer.writerow(['Application', 'Date'])
         for activity in android_activity:
             current_date = activity['time']
