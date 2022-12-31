@@ -7,13 +7,13 @@ import date
 def _get_call_type(type: str) -> str:
     # Call types referenced from: https://developer.android.com/reference/android/provider/CallLog.Calls
     call_types = {
-        '1': 'incoming',
-        '2': 'outgoing',
-        '3': 'missed',
-        '4': 'voicemail',
-        '5': 'rejected',
-        '6': 'blocked',
-        '7': 'answered externally'
+        '1': 'INCOMING',
+        '2': 'OUTGOING',
+        '3': 'MISSED',
+        '4': 'VOICEMAIL',
+        '5': 'REJECTED',
+        '6': 'BLOCKED',
+        '7': 'ANSWERED EXTERNALLY'
     }
     
     return call_types[type]
