@@ -7,7 +7,7 @@ from pprint import pprint
 
 import google_timeline
 
-class TestGoogleTImeline(unittest.TestCase):
+class TestGoogleTimeline(unittest.TestCase):
     def test_xor(self):
         self.assertEqual(google_timeline._xor(True, True), False)
         self.assertEqual(google_timeline._xor(True, False), True)
